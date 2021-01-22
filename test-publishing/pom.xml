@@ -440,6 +440,7 @@
                             <wikiFilesExt>.confluence</wikiFilesExt>
                             <failOnError>true</failOnError>
                             <siteDescriptor>${basedir}/src/site/confluence/issue238/site.yaml</siteDescriptor>
+                            <childrenTitlesPrefixed>false</childrenTitlesPrefixed>
                         </configuration>
                     </execution>
 
