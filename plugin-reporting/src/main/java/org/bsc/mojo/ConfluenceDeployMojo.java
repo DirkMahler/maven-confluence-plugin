@@ -33,6 +33,7 @@ import org.bsc.confluence.ConfluenceService;
 import org.bsc.confluence.ConfluenceService.Model;
 import org.bsc.confluence.ConfluenceService.Storage;
 import org.bsc.confluence.ConfluenceService.Storage.Representation;
+import org.bsc.confluence.ConfluenceServiceBuilder;
 import org.bsc.confluence.DeployStateManager;
 import org.bsc.confluence.ParentChildTuple;
 import org.bsc.confluence.model.Site;
@@ -52,6 +53,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 import static java.lang.String.format;
+import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.bsc.confluence.model.SitePrinter.print;
@@ -283,11 +285,11 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
 
     /**
      *
-     * @param confluence
+     * @param confluenceBuilder
      * @throws Exception
      */
     @Override
-    public void execute( ConfluenceService confluence ) throws Exception {
+    protected void execute( ConfluenceServiceBuilder confluenceBuilder ) throws Exception {
 
         getLog().info(format("executeReport isSnapshot = [%b] isRemoveSnapshots = [%b]", isSnapshot(), isRemoveSnapshots()));
 
@@ -299,9 +301,17 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
 
         final Site site = loadSite();
 
+        site.setDefaultExt( getFileExt() );
+
         initTemplateProperties( site );
 
-        final Locale parsedLocale = !StringUtils.isEmpty(locale) ? new Locale(locale) : Locale.getDefault();
+        final Locale parsedLocale =
+                ofNullable(locale)
+                        .filter(l-> !l.isEmpty())
+                        .map( Locale::new )
+                        .orElseGet( Locale::getDefault );
+
+        final ConfluenceService confluence = confluenceBuilder.site(site).build();
 
         if ( project.getPackaging().equals( "maven-plugin" ) )
        /////////////////////////////////////////////////////////////////
@@ -539,12 +549,11 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
     {
 
         final Site.Page home = site.getHome();
-        final java.net.URI uri = home.getUri();
         final Optional<String> pagePrefixToApply = (isChildrenTitlesPrefixed())
                     ? ofNullable(this.getPageTitle())
-                    : Optional.empty();
+                    : empty();
 
-        return processPageUri( site, home, homePage, uri, pagePrefixToApply)
+        return processPageUri( site, home, homePage, pagePrefixToApply)
                 .thenCompose( content -> {
 
                     try {
@@ -578,13 +587,13 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
         final String _homePageTitle = getPageTitle();
 
         final Function<Model.Page, CompletableFuture<Model.Page>> updateHomePage = (p) ->
-            updatePageIfNeeded(site.getHome().getUri(), p,
+            updatePageIfNeeded(site.getHome(), p,
                     () -> getHomeContent(site, Optional.of(p), locale).
                                                 thenCompose( content -> confluence.storePage(p, content )));
 
         final Function<Model.Page, CompletableFuture<Model.Page>> createHomePage = (_parentPage) ->
-                resetUpdateStatusForResource(site.getHome().getUri())
-                        .thenCompose( reset -> getHomeContent(  site, Optional.empty(), locale ) )
+                resetUpdateStatusForSource(site.getHome())
+                        .thenCompose( reset -> getHomeContent(  site, empty(), locale ) )
                         .thenCompose( content -> confluence.createPage(_parentPage, _homePageTitle,content) );
 
         final Model.Page confluenceHomePage =
@@ -855,9 +864,9 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
             final String title = getPageTitle();
             final Optional<String> pagePrefixToApply = (isChildrenTitlesPrefixed())
                     ? ofNullable(getPageTitle())
-                    : Optional.empty();
+                    : empty();
 
-            return processPageUri(site, site.getHome(), homePage, site.getHome().getUri(), pagePrefixToApply )
+            return processPageUri(site, site.getHome(), homePage, pagePrefixToApply )
                     .thenCompose( content -> {
 
                         try {
@@ -958,9 +967,9 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
             final String title = getPageTitle();
             final Optional<String> pagePrefixToApply = (isChildrenTitlesPrefixed())
                     ? ofNullable(getPageTitle())
-                    : Optional.empty();
+                    : empty();
 
-            return processPageUri(site, site.getHome(), Optional.of(homePage), site.getHome().getUri(), pagePrefixToApply )
+            return processPageUri(site, site.getHome(), Optional.of(homePage), pagePrefixToApply )
                     .thenCompose( content -> {
 
                     try {
@@ -1066,13 +1075,13 @@ public class ConfluenceDeployMojo extends AbstractConfluenceDeployMojo {
             getProperties().put("version",      getProject().getVersion());
 
             final Function<Model.Page, CompletableFuture<Model.Page>> updatePage = (p) ->
-                updatePageIfNeeded( site.getHome().getUri(),p,
+                updatePageIfNeeded( site.getHome(),p,
                         () -> getHomeContent( site, Optional.of(p), pluginDescriptor, locale)
                                         .thenCompose( content -> confluence.storePage(p, content)));
 
             final Function<Model.Page, CompletableFuture<Model.Page>> createPage = (parent) ->
-                    resetUpdateStatusForResource(site.getHome().getUri())
-                        .thenCompose( reset -> getHomeContent(site, Optional.empty(), pluginDescriptor, locale)
+                    resetUpdateStatusForSource(site.getHome())
+                        .thenCompose( reset -> getHomeContent(site, empty(), pluginDescriptor, locale)
                         .thenCompose( content ->confluence.createPage(parent, title, content)));
 
             return removeSnaphot(confluence, parentPage, title)

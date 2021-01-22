@@ -4,6 +4,7 @@ import com.google.common.io.Files;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.bsc.confluence.ConfluenceService;
+import org.bsc.confluence.ConfluenceServiceBuilder;
 import org.bsc.markdown.MarkdownProcessor;
 import org.bsc.mojo.configuration.MarkdownProcessorInfo;
 
@@ -77,8 +78,13 @@ public class ConfluenceBlogpostMojo extends AbstractBaseConfluenceMojo {
     @Parameter( property="blog.version", defaultValue = "0")
     private int version;
 
+    /**
+     *
+     * @param confluenceServiceBuilder
+     * @throws Exception
+     */
     @Override
-    public void execute(ConfluenceService confluenceService) throws Exception {
+    protected void execute(ConfluenceServiceBuilder confluenceServiceBuilder) throws Exception {
 
         if(title==null) throw new IllegalArgumentException( "blogTitle cannot be null!. Check configuration");
 
@@ -101,6 +107,8 @@ public class ConfluenceBlogpostMojo extends AbstractBaseConfluenceMojo {
                                         ? MarkdownProcessor.shared.processMarkdown(contentData)
                                         : contentData,
                                     representation);
+
+        final ConfluenceService confluenceService = confluenceServiceBuilder.build();
 
         final Model.Blogpost blogpost = confluenceService.createBlogpost( getSpaceKey(), title, storage, version);
 

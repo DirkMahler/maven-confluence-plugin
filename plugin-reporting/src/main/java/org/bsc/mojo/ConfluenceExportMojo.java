@@ -15,6 +15,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.bsc.confluence.ConfluenceService;
 import org.bsc.confluence.ConfluenceService.Model;
+import org.bsc.confluence.ConfluenceServiceBuilder;
 import org.bsc.confluence.ExportFormat;
 
 /**
@@ -88,13 +89,13 @@ public class ConfluenceExportMojo extends AbstractBaseConfluenceMojo {
 
     /**
      *
-     * @param confluence
+     * @param confluenceBuilder
      * @throws Exception
      */
     @Override
-    public void execute( ConfluenceService confluence) throws Exception {
+    protected void execute( ConfluenceServiceBuilder confluenceBuilder) throws Exception {
 
-        exportPage(confluence);
+        exportPage(confluenceBuilder.build());
 
     }
     

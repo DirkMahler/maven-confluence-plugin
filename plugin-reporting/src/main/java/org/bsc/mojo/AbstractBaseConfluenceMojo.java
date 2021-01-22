@@ -9,7 +9,7 @@ import org.apache.maven.settings.Server;
 import org.bsc.confluence.ConfluenceProxy;
 import org.bsc.confluence.ConfluenceService;
 import org.bsc.confluence.ConfluenceService.Model;
-import org.bsc.confluence.ConfluenceServiceFactory;
+import org.bsc.confluence.ConfluenceServiceBuilder;
 import org.bsc.confluence.model.Site;
 import org.bsc.mojo.configuration.ScrollVersionsInfo;
 import org.bsc.ssl.SSLCertificateInfo;
@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import static java.lang.String.format;
+import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 
@@ -206,7 +207,7 @@ public abstract class AbstractBaseConfluenceMojo extends AbstractMojo {
             final String _parentPageId = site.flatMap( s -> s.getHome().optParentPageId()).orElse( parentPageId );
             final String _parentPageTitle = site.flatMap( s -> s.getHome().optParentPageTitle()).orElse(parentPageTitle);
 
-            Optional<Model.Page> result = Optional.empty();
+            Optional<Model.Page> result = empty();
 
             if( _parentPageId != null ) {
                 result = confluence.getPage(  Model.ID.of(_parentPageId) ).join();
@@ -333,16 +334,17 @@ public abstract class AbstractBaseConfluenceMojo extends AbstractMojo {
         final ConfluenceService.Credentials credentials =
                 new ConfluenceService.Credentials(getUsername(), getPassword());
 
-        try ( ConfluenceService confluence  =
-                      ConfluenceServiceFactory.createInstance(
-                              getEndPoint(),
-                              credentials,
-                              proxyInfo.orElse(null),
-                              sslCertificate,
-                              scrollVersions ) )
-        {
+        final ConfluenceServiceBuilder builder = ConfluenceServiceBuilder.of( getLog() )
+                .endpoint(getEndPoint())
+                .credentials(credentials)
+                .sslInfo(sslCertificate)
+                .scrollVersionInfo(scrollVersions);
 
-            execute( confluence );
+        proxyInfo.ifPresent( pi -> builder.proxyInfo(pi) );
+
+        try {
+
+            execute( builder );
 
         }
         catch( Exception e ) {
@@ -359,5 +361,5 @@ public abstract class AbstractBaseConfluenceMojo extends AbstractMojo {
 
     }
 
-    public abstract void execute( ConfluenceService confluenceService ) throws Exception ;
+    protected abstract void execute( ConfluenceServiceBuilder confluenceBuilder ) throws Exception ;
 }

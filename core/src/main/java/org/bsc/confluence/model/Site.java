@@ -5,6 +5,7 @@
 package org.bsc.confluence.model;
 
 import javax.xml.bind.annotation.*;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,6 +16,7 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static java.lang.String.format;
+import static java.util.Optional.ofNullable;
 
 /**
  *
@@ -49,7 +51,7 @@ public class Site {
      * @return
      */
     public final Optional<String> optSpaceKey() {
-        return Optional.ofNullable(spaceKey);
+        return ofNullable(spaceKey);
     }
     
     /**
@@ -59,13 +61,12 @@ public class Site {
         this.spaceKey = spaceKey;
     }
 
-
     private transient Optional<Path> _basedir = Optional.empty();
     
     @XmlTransient
     public void setBasedir( Path basedir ) {
         
-        this._basedir = Optional.ofNullable(basedir).map( (p) -> Files.isDirectory(p) ?
+        this._basedir = ofNullable(basedir).map( (p) -> Files.isDirectory(p) ?
                 Paths.get(p.toString()) :
                 Paths.get(p.getParent().toString()));
            
@@ -73,6 +74,17 @@ public class Site {
      
     public Path getBasedir() {
         return _basedir.orElseThrow( () -> new IllegalStateException("basedir is not set!"));
+    }
+
+    private transient String defaultFileExt;
+
+    @XmlTransient
+    public void setDefaultExt(String fileExt) {
+        defaultFileExt = fileExt;
+    }
+
+    public String getDefaultFileExt() {
+        return defaultFileExt;
     }
 
     @XmlAttribute(name="label")
@@ -112,7 +124,7 @@ public class Site {
      * class Source
      */
     @XmlType(namespace = Site.NAMESPACE)
-    protected static class Source {
+    public static class Source {
         private static final Pattern lead_trail_spaces = Pattern.compile("^(.*)\\s+$|^\\s+(.*)");
 
         protected transient final Site site;
@@ -124,14 +136,14 @@ public class Site {
         private java.net.URI uri;
 
         @XmlAttribute
-        public final java.net.URI getUri() {
+        public java.net.URI getUri() {
             if (uri != null && !uri.isAbsolute()) {
                 return site.getBasedir().toUri().resolve(uri);
             }
             return uri;
         }
 
-        public final void setUri(java.net.URI value) {
+        public void setUri(java.net.URI value) {
             if (null == value) {
                 throw new IllegalArgumentException("uri is null");
             }
@@ -150,7 +162,7 @@ public class Site {
         }
 
         public final Optional<String> optName() {
-            return Optional.ofNullable(name);
+            return ofNullable(name);
         }
 
         public void setName(String name) {
@@ -313,44 +325,41 @@ public class Site {
         public void setAttachment( Attachment attachment ) {
             attachments.add( attachment );
         }
-
-        public java.net.URI getUri(String ext) {
-
-            if (getUri() == null) {
-                if (getName() == null) {
-                    throw new IllegalStateException("name is null");
-                }
-
-                setUri(site.getBasedir().toUri().resolve(getName().concat(ext)));
-
-            }
-
-            return getUri();
-        }
-
+        /**
+         * attribute ignoreVariables
+         */
         boolean ignoreVariables = false;
-
+        /**
+         *
+         * @return
+         */
         public Boolean isIgnoreVariables() {
             return ignoreVariables;
         }
-
         /**
          * this attribute name containing dash is not supported in yaml format
+         *
+         * @Deprecated
          */
         @XmlAttribute(name = "ignore-variables")
         @Deprecated
         public void setIgnoreVariablesDeprecated(Boolean value) {
-            this.ignoreVariables = Optional.ofNullable(value).orElse( false );
+            this.ignoreVariables = ofNullable(value).orElse( false );
         }
-
+        /**
+         *
+         * @param value
+         */
         @XmlAttribute(name = "ignoreVariables")
         public void setIgnoreVariables(Boolean value) {
-            this.ignoreVariables = Optional.ofNullable(value).orElse( false );
+            this.ignoreVariables = ofNullable(value).orElse( false );
         }
-
+        /**
+         * element generated
+         *
+         */
         @XmlElement(name = "generated")
         protected List<Generated> generateds;
-
         /**
          * Gets the value of the generateds property.
          *
@@ -409,7 +418,6 @@ public class Site {
             }
 
         }
-
         /**
          *
          * @param criteria
@@ -432,15 +440,34 @@ public class Site {
 
     @XmlType(name = "home", namespace = Site.NAMESPACE)
     public static class Home extends Page {
-        private String parentPageTitle;
+        /**
+         *
+         * @param ext
+         * @return
+         */
+        @Override
+        public java.net.URI getUri() {
 
+            return ofNullable(super.getUri()).orElseGet( () ->  {
+                if (getName() == null) {
+                    throw new IllegalStateException("name is null");
+                }
+                final String name_and_ext = getName().concat(site.getDefaultFileExt());
+                final java.net.URI uri = site.getBasedir().toUri().resolve(name_and_ext);
+                setUri(uri);
+                return uri;
+            });
+        }
+        /**
+         * parentPageTitle attribute
+         */
+        private String parentPageTitle;
         /**
          * @return the parentPageTitle
          */
         public String getParentPageTitle() {
             return parentPageTitle;
         }
-
         /**
          * this attribute name containing dash is not supported in yaml format
          *
@@ -451,7 +478,6 @@ public class Site {
         public void setParentPageTitleDeperecated(String parentPageTitle) {
             this.parentPageTitle = parentPageTitle;
         }
-
         /**
          * @param parentPageTitle the parentPageTitle to set
          */
@@ -459,18 +485,17 @@ public class Site {
         public void setParentPageTitle(String parentPageTitle) {
             this.parentPageTitle = parentPageTitle;
         }
-
         /**
          *
          * @return
          */
         public final Optional<String> optParentPageTitle() {
-            return Optional.ofNullable(parentPageTitle);
+            return ofNullable(parentPageTitle);
         }
-
-
+        /**
+         * attribute parentPageId
+         */
         private String parentPageId;
-
         /**
          * @return the parentPageTitle
          */
@@ -482,6 +507,7 @@ public class Site {
 
          * @param parentPageId the parentPageTitle to set
          */
+        @Deprecated
         @XmlAttribute( name="parent-page-id")
         public void setParentPageIdDeprecated(String parentPageId) {
             this.parentPageId = parentPageId;
@@ -493,17 +519,34 @@ public class Site {
         public void setParentPageId(String parentPageId) {
             this.parentPageId = parentPageId;
         }
-
         /**
          *
          * @return
          */
         public final Optional<String> optParentPageId() {
-            return Optional.ofNullable(parentPageId);
+            return ofNullable(parentPageId);
         }
-
-
-
+        /**
+         * attribute anchor
+         *
+         * @see https://github.com/bsorrentino/maven-confluence-plugin/issues/238
+         */
+        private boolean anchor = false;
+        /**
+         *
+         * @return
+         */
+        public boolean isAnchor() {
+            return anchor;
+        }
+        /**
+         *
+         * @param anchor
+         */
+        @XmlAttribute( name="anchor")
+        public void setAnchor(boolean anchor) {
+            this.anchor = anchor;
+        }
 
     }
 

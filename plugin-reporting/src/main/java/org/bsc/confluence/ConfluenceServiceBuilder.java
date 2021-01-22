@@ -6,6 +6,7 @@
 package org.bsc.confluence;
 
 import org.bsc.confluence.ConfluenceService.Credentials;
+import org.bsc.confluence.model.Site;
 import org.bsc.confluence.rest.RESTConfluenceService;
 import org.bsc.confluence.rest.model.Page;
 import org.bsc.confluence.rest.scrollversions.ScrollVersionsConfluenceService;
@@ -17,17 +18,32 @@ import javax.json.JsonObjectBuilder;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import static java.lang.String.format;
+import static java.util.Arrays.stream;
+import static java.util.Optional.empty;
+import static java.util.Optional.ofNullable;
+import static java.util.stream.Collectors.joining;
 import static org.bsc.confluence.xmlrpc.XMLRPCConfluenceService.createInstanceDetectingVersion;
+
 /**
  *
  * @author bsorrentino
  */
-public class ConfluenceServiceFactory {
+public class ConfluenceServiceBuilder {
+
+    /**
+     *
+     * @param log
+     * @return
+     */
+    public static ConfluenceServiceBuilder of(org.apache.maven.plugin.logging.Log log) {
+        return new ConfluenceServiceBuilder(log);
+    }
 
     private static class MixedConfluenceService implements ConfluenceService {
         final XMLRPCConfluenceService xmlrpcService;
@@ -170,40 +186,115 @@ public class ConfluenceServiceFactory {
         
     }
 
-    /**
-     * return XMLRPC based Confluence services
-     * 
-     * @param endpoint
-     * @param credentials
-     * @param proxyInfo
-     * @param sslInfo
-     * @param svi scroll versions addon parameters
-     * @return XMLRPC based Confluence services
-     * @throws Exception
-     */
-    public static ConfluenceService createInstance( String endpoint, 
-                                                        Credentials credentials, 
-                                                        ConfluenceProxy proxyInfo, 
-                                                        SSLCertificateInfo sslInfo,
-                                                        ScrollVersionsInfo svi ) throws Exception
-    {
-            if( ConfluenceService.Protocol.XMLRPC.match(endpoint)) {
-                return new MixedConfluenceService(endpoint, credentials, proxyInfo, sslInfo);               
-            }
-            if( ConfluenceService.Protocol.REST.match(endpoint)) {
-                return svi.optVersion()
-                        .map( version -> (ConfluenceService)new ScrollVersionsConfluenceService(endpoint, version, credentials, sslInfo) )
-                        .orElseGet( () -> new RESTConfluenceService(endpoint, credentials /*, proxyInfo*/, sslInfo))
-                         ;               
-            }
-            
-            throw new IllegalArgumentException( 
-                    format("endpoint doesn't contain a valid API protocol\nIt must be '%s' or '%s'",
-                            ConfluenceService.Protocol.XMLRPC.path(),
-                            ConfluenceService.Protocol.REST.path()) 
-                    );
+    final org.apache.maven.plugin.logging.Log log;
+    private String endpoint;
+    private Credentials credentials;
+    private SSLCertificateInfo sslInfo;
+    private ScrollVersionsInfo svi;
+    private ConfluenceProxy proxyInfo;
+    private Optional<Site> optSite = empty();
 
+    public ConfluenceServiceBuilder endpoint(String endpoint) {
+        this.endpoint = endpoint;
+        return this;
+    }
+
+    public ConfluenceServiceBuilder credentials(Credentials credentials) {
+        this.credentials = credentials;
+        return this;
+    }
+
+    public ConfluenceServiceBuilder sslInfo(SSLCertificateInfo sslInfo) {
+        this.sslInfo = sslInfo;
+        return this;
+    }
+
+    /**
+     *
+     * @param svi scroll versions addon parameters
+     * @return
+     */
+    public ConfluenceServiceBuilder scrollVersionInfo(ScrollVersionsInfo svi) {
+        this.svi = svi;
+        return this;
+    }
+
+    public ConfluenceServiceBuilder proxyInfo(ConfluenceProxy proxyInfo) {
+        this.proxyInfo = proxyInfo;
+        return this;
+    }
+
+    public ConfluenceServiceBuilder site(Site site) {
+        this.optSite = ofNullable(site);
+        return this;
+    }
+
+    private ConfluenceService newService() throws Exception {
+        if( ConfluenceService.Protocol.XMLRPC.match(endpoint)) {
+            return new MixedConfluenceService(endpoint, credentials, proxyInfo, sslInfo);
+        }
+        if( ConfluenceService.Protocol.REST.match(endpoint)) {
+            return svi.optVersion()
+                    .map( version -> (ConfluenceService)new ScrollVersionsConfluenceService(endpoint, version, credentials, sslInfo) )
+                    .orElseGet( () -> new RESTConfluenceService(endpoint, credentials /*, proxyInfo*/, sslInfo))
+                    ;
+        }
+
+        throw new IllegalArgumentException(
+                format("endpoint doesn't contain a valid API protocol\nIt must be '%s' or '%s'",
+                        ConfluenceService.Protocol.XMLRPC.path(),
+                        ConfluenceService.Protocol.REST.path())
+        );
+    }
+
+    private ConfluenceService proxyService( ConfluenceService service ) {
+            return (ConfluenceService) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] { ConfluenceService.class },
+                (proxy, method, methodArgs) -> {
+                    if( log.isDebugEnabled() ) {
+
+                        final String args =
+                                ofNullable(methodArgs)
+                                    .map( a -> stream(a).map(String::valueOf).collect(joining(",")))
+                                    .orElse("");
+
+                        log.debug( format("ConfluenceService.%s( %s )\n", method.getName(), args));
+
+                    }
+//                    if( "storePage".equals(method.getName())) {
+//
+//                        if( methodArgs!=null && methodArgs.length > 0 && methodArgs[0] instanceof ConfluenceService.Model.Page ) {
+//                            final ConfluenceService.Model.Page page =
+//                                    (ConfluenceService.Model.Page) methodArgs[0];
+//
+//                            final String title = page.getTitle();
+//                            final boolean isAnchor = site.getHome()
+//                                    .findPage( p -> p.getName().equals(title))
+//                                    .map( p -> p.isAnchor() )
+//                                    .orElse( false );
+//                            if( isAnchor ) {
+//                                log.info( format("page '%s' is an anchor! update skipped!", title));
+//                                return CompletableFuture.completedFuture(page);
+//                            }
+//
+//                        }
+//                    }
+                    return method.invoke( service, methodArgs);
+                });
 
     }
-     
+
+    public ConfluenceService build() throws Exception {
+        return newService();
+
+    }
+
+    private ConfluenceServiceBuilder( org.apache.maven.plugin.logging.Log log ) {
+        if( log == null ) throw new IllegalArgumentException("log argument is null!");
+        this.log = log;
+    }
+
+
+
 }

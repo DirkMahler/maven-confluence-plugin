@@ -98,13 +98,11 @@ public class SiteProcessor {
 
         return callback.apply( Optional.empty(), Optional.of(result));
     }
-
     /**
      *
      * @param site
      * @param child
      * @param page
-     * @param uri
      * @param pagePrefixToApply
      * @param <P>
      * @return
@@ -113,9 +111,10 @@ public class SiteProcessor {
            final Site site,
            final P child,
            final Optional<Model.Page> page,
-           final java.net.URI uri, 
            final Optional<String> pagePrefixToApply)
    {
+       final java.net.URI uri = child.getUri();
+
        Objects.requireNonNull(uri, "uri is null!");
 
        String scheme = uri.getScheme();
